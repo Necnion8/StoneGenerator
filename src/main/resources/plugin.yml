@@ -1,0 +1,4 @@
+name: StoneGenerator
+version: '${version}'
+main: com.gmail.necnionch.myplugin.stonegenerator.bukkit.StoneGeneratorPlugin
+api-version: '1.16'

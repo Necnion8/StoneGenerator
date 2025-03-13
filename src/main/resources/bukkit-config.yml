@@ -1,0 +1,27 @@
+
+worlds:
+  # ワールド名
+  mining:
+    # 生成待ちのブロックタイプ
+    fill-type: cobblestone
+
+    # 生成に必要な時間 (秒)
+    generate-time-min: 30
+    generate-time-max: 600
+
+    # 鉱石ブロックの設定
+    generate-blocks:
+      - type: iron_ore
+        priority: 10
+      - type: gold_ore
+        priority: 5
+      - type: stone
+        priority: 20
+        fill-type: cracked_stone_bricks  # fill-type を上書きできます
+
+    # ブロックを処理する条件 (いずれかが失敗する場合は処理しません)
+    target-blocks:
+      # 触れたブロックの面の先にあるブロックをテストします
+      deep-types:
+        - bedrock  # MINER -> TARGETING_BLOCK -> BEDROCK<testing!>
+        - bedrock  # MINER -> TARGETING_BLOCK -> BEDROCK -> BEDROCK<testing!>
