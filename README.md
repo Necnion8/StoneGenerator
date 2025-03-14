@@ -1,4 +1,19 @@
+# StoneGenerator
+採掘した鉱石を一定時間後に復活させるプラグイン
 
+## 前提
+- Spigot 1.16.3 以上
+
+## コマンドと権限
+| コマンド                                   | サブコマンド / 説明                         | 権限                                    | デフォルト |
+|----------------------------------------|-------------------------------------|:--------------------------------------|:-----:|
+| /stonegenerator<br><sup>管理者用コマンド</sup> |                                     | stonegenerator.command.stonegenerator | OPのみ  |
+| 〃                                      | status<br><sup>処理しているブロック数の表示</sup> | 〃                                     |   〃   |
+| 〃                                      | reload<br><sup>設定ファイルの再読み込み</sup>   | 〃                                     |   〃   |
+
+## 設定
+> [./plugins/StoneGenerator/config.yml](src%2Fmain%2Fresources%2Fbukkit-config.yml)
+```yml
 worlds:
   # ワールド名
   mining:
@@ -33,3 +48,4 @@ worlds:
       deep-types:
         - bedrock  # MINER -> TARGETING_BLOCK -> BEDROCK<testing!>
         - bedrock  # MINER -> TARGETING_BLOCK -> BEDROCK -> BEDROCK<testing!>
+```
