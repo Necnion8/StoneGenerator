@@ -1,5 +1,6 @@
 package com.gmail.necnionch.myplugin.stonegenerator.bukkit;
 
+import com.gmail.necnionch.myplugin.stonegenerator.bukkit.command.StoneGeneratorCommand;
 import com.gmail.necnionch.myplugin.stonegenerator.bukkit.config.StoneGeneratorConfig;
 import com.gmail.necnionch.myplugin.stonegenerator.bukkit.listener.BlockListener;
 import com.gmail.necnionch.myplugin.stonegenerator.bukkit.listener.WorldListener;
@@ -8,6 +9,7 @@ import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public final class StoneGeneratorPlugin extends JavaPlugin implements SGUtil {
@@ -21,9 +23,11 @@ public final class StoneGeneratorPlugin extends JavaPlugin implements SGUtil {
         genManager.startTimer();
         d("restored " + restoreAllChunks() + " blocks (plugin load)");
 
+        Optional.ofNullable(getCommand("stonegenerator")).ifPresent(cmd ->
+                cmd.setExecutor(new StoneGeneratorCommand(this, genManager)));
+
         getServer().getPluginManager().registerEvents(new BlockListener(genManager), this);
         getServer().getPluginManager().registerEvents(new WorldListener(genManager, this), this);
-
     }
 
     @Override
@@ -69,4 +73,10 @@ public final class StoneGeneratorPlugin extends JavaPlugin implements SGUtil {
         if (mainConfig.isDebug())
             getLogger().warning("[DEBUG]: " + message);
     }
+
+    @Override
+    public void reloadPluginConfig() {
+        mainConfig.load();
+    }
+
 }

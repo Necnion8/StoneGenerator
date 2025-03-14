@@ -11,4 +11,6 @@ public interface SGUtil {
 
     void d(Supplier<String> message);
 
+    void reloadPluginConfig();
+
 }

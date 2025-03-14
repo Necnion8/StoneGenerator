@@ -102,6 +102,8 @@ public class StoneGeneratorConfig extends BukkitConfigDriver {
             Sound genSound = Optional.ofNullable(wSection.getString("generate-sound"))
                     .map(s -> s.toUpperCase(Locale.ROOT))
                     .map(s -> {
+                        if ("-1".equalsIgnoreCase(s))
+                            return null;
                         try {
                             return Sound.valueOf(s);
                         } catch (IllegalArgumentException e) {
