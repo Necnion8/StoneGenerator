@@ -1,6 +1,7 @@
 package com.gmail.necnionch.myplugin.stonegenerator.bukkit.config;
 
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -12,13 +13,15 @@ public class WorldSetting {
     private final Material fillBlockType;
     private final int genMinTime;
     private final int genMaxTime;
+    private final @Nullable Sound generateSound;
     private final TargetBlocks targetBlocks;
 
-    public WorldSetting(List<GenerateBlock> blocks, Material fillBlockType, int genMinTime, int genMaxTime, TargetBlocks targetBlocks) {
+    public WorldSetting(List<GenerateBlock> blocks, Material fillBlockType, int genMinTime, int genMaxTime, @Nullable Sound generateSound, TargetBlocks targetBlocks) {
         this.generateBlocks = blocks;
         this.fillBlockType = fillBlockType;
         this.genMinTime = genMinTime;
         this.genMaxTime = genMaxTime;
+        this.generateSound = generateSound;
         this.targetBlocks = targetBlocks;
     }
 
@@ -30,7 +33,7 @@ public class WorldSetting {
         return fillBlockType;
     }
 
-    public long getGenerateMinTime() {
+    public int getGenerateMinTime() {
         return genMinTime;
     }
 
@@ -38,12 +41,24 @@ public class WorldSetting {
         return genMaxTime;
     }
 
+    public @Nullable Sound getGenerateSound() {
+        return generateSound;
+    }
+
     public TargetBlocks getTargetBlocks() {
         return targetBlocks;
     }
 
-    public Optional<GenerateBlock> getBlock(Material type) {
-        return generateBlocks.stream().filter(b -> type.equals(b.type)).findAny();
+
+    public Material getOverrideFillBlockType(GenerateBlock generateBlock) {
+        return Optional.ofNullable(generateBlock.getFillBlockType()).orElse(fillBlockType);
+    }
+
+    public @Nullable Sound getOverrideGenerateSound(GenerateBlock generateBlock) {
+        if (generateBlock.isOverrideGenerateSound()) {
+            return generateBlock.getGenerateSound();
+        }
+        return generateSound;
     }
 
 
@@ -51,24 +66,36 @@ public class WorldSetting {
 
         private final Material type;
         private final int priority;
-        private final @Nullable Material replaceType;
+        private final @Nullable Material fillBlockType;
+        private final @Nullable Sound generateSound;
+        private final boolean overrideGenerateSound;
 
-        public GenerateBlock(Material blockType, int priority, @Nullable Material replaceType) {
+        public GenerateBlock(Material blockType, int priority, @Nullable Material fillBlockType, @Nullable Sound generateSound, boolean overrideGenerateSound) {
             this.type = blockType;
             this.priority = priority;
-            this.replaceType = replaceType;
+            this.fillBlockType = fillBlockType;
+            this.generateSound = generateSound;
+            this.overrideGenerateSound = overrideGenerateSound;
         }
 
         public Material getType() {
             return type;
         }
 
-        public @Nullable Material getReplaceType() {
-            return replaceType;
+        public @Nullable Material getFillBlockType() {
+            return fillBlockType;
         }
 
         public int getPriority() {
             return priority;
+        }
+
+        public @Nullable Sound getGenerateSound() {
+            return generateSound;
+        }
+
+        public boolean isOverrideGenerateSound() {
+            return overrideGenerateSound;
         }
 
     }

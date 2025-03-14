@@ -30,7 +30,7 @@ public final class StoneGeneratorPlugin extends JavaPlugin implements SGUtil {
     public void onDisable() {
         genManager.stopTimer();
         d("stored " + storeAllChunks() + " blocks (plugin unload)");
-        genManager.clearQueueBlocks();
+        genManager.clear();
     }
 
 
@@ -54,6 +54,9 @@ public final class StoneGeneratorPlugin extends JavaPlugin implements SGUtil {
         return count;
     }
 
+    public StoneGenerateManager getManager() {
+        return genManager;
+    }
 
     @Override
     public void d(Supplier<String> message) {

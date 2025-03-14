@@ -6,10 +6,7 @@ import com.gmail.necnionch.myplugin.stonegenerator.bukkit.util.QueueBlock;
 import com.gmail.necnionch.myplugin.stonegenerator.bukkit.util.SGUtil;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import org.bukkit.Chunk;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -18,20 +15,17 @@ import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.logging.Level;
 
 public class StoneGenerateManager {
 
-    private static final Set<Material> AIR_TYPES = Stream.of(Material.values())
-            .filter(m -> m.name().contains("AIR"))
-            .collect(Collectors.toSet());
     private final Plugin owner;
     private final StoneGeneratorConfig config;
     private final SGUtil util;
     private final Random random = new Random();
     private final Multimap<World, QueueBlock> queuedBlocks = ArrayListMultimap.create();
-    private final Map<String, QueueBlock> queuedBlockKeys = new HashMap<>();
+    private final Map<String, QueueBlock> queuedBlockKeys = new HashMap<>();  // 位置キーとQueueBlockのマップ
+    private final Map<String, Integer> storedQueueBlockGenerateDelays = new HashMap<>();  // 位置キーとアンロード済みQueueBlockの生成待ち時間
     private final NamespacedKey queueBlockXPDCKey;
     private final NamespacedKey queueBlockYPDCKey;
     private final NamespacedKey queueBlockZPDCKey;
@@ -76,62 +70,112 @@ public class StoneGenerateManager {
         for (Iterator<QueueBlock> it = queuedBlocks.values().iterator(); it.hasNext(); ) {
             QueueBlock queueBlock = it.next();
             getConfig().getWorld(queueBlock.getWorld()).ifPresent(setting -> {
-                if (setting.getGenerateMinTime() * 1000 <= now - queueBlock.getQueuedTime()) {
+                boolean delete = true;
+                try {
+                    delete = tickToQueueBlock(now, queueBlock, setting);
+                } catch (Exception e) {
+                    util.getLogger().log(Level.SEVERE, "Exception in tickToQueueBlock", e);
+                }
+                if (delete) {
                     it.remove();
                     queuedBlockKeys.values().remove(queueBlock);
-
-                    Block block = queueBlock.getWorld().getBlockAt(queueBlock.getX(), queueBlock.getY(), queueBlock.getZ());
-                    if (setting.blocks().isEmpty())
-                        return;
-
-                    WorldSetting.GenerateBlock bSetting = setting.blocks().get(random.nextInt(setting.blocks().size()));
-                    block.setType(bSetting.getType());  // TODO: set priority
+                    storedQueueBlockGenerateDelays.remove(queueBlock.getLocationKey());
                 }
             });
         }
 
     }
 
+    private boolean tickToQueueBlock(long nowTime, QueueBlock queueBlock, WorldSetting setting) {
+        if (queueBlock.getGenerateDelay() * 1000L <= nowTime - queueBlock.getQueuedTime()) {
+            List<WorldSetting.GenerateBlock> blocks = setting.blocks();
+            if (!blocks.isEmpty()) {
+                float targetPriority = blocks.stream().mapToInt(WorldSetting.GenerateBlock::getPriority).sum() * random.nextFloat();
+                int currentPriority = 0;
 
-    public void clearQueueBlocks() {
+                WorldSetting.GenerateBlock selected = null;
+                for (WorldSetting.GenerateBlock bSetting : blocks) {
+                    currentPriority += bSetting.getPriority();
+                    if (targetPriority <= currentPriority) {
+                        selected = bSetting;
+                        break;
+                    }
+                }
+
+                World world = queueBlock.getWorld();
+                Block block = world.getBlockAt(queueBlock.getX(), queueBlock.getY(), queueBlock.getZ());
+                block.setType(Objects.requireNonNull(selected, "priority bug?").getType());
+
+                Sound sound = setting.getOverrideGenerateSound(selected);
+                if (sound != null) {
+                    world.playSound(block.getLocation().add(.5, .5, .5), sound, SoundCategory.BLOCKS, 1f, 1f);
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+
+    /**
+     * メモリ内のデータをクリアします
+     */
+    public void clear() {
         queuedBlocks.clear();
         queuedBlockKeys.clear();
+        storedQueueBlockGenerateDelays.clear();
     }
 
-    public void clearQueueBlocks(World world) {
-        Collection<QueueBlock> blocks = queuedBlocks.removeAll(world);
-        queuedBlockKeys.values().removeAll(blocks);
-        // TODO: rollback? or commit pdc?
-
-    }
-
+    /**
+     * {@link QueueBlock} を処理リストに追加します
+     */
     public void putQueueBlock(QueueBlock queueBlock) {
         queuedBlocks.put(queueBlock.getWorld(), queueBlock);
-        queuedBlockKeys.put(queueBlock.getKey(), queueBlock);
+        queuedBlockKeys.put(queueBlock.getLocationKey(), queueBlock);
     }
 
-    public void queueBreakBlock(Block block, Runnable placer) {
-        long queuedTime = System.currentTimeMillis();
-        runTask(() -> {
-            Block newBlock = block.getWorld().getBlockAt(block.getX(), block.getY(), block.getZ());
-            if (!AIR_TYPES.contains(newBlock.getType()))  // ignore
-                return;
+    /**
+     * 採掘されたブロックをキューして、丸石を設置します
+     */
+    public void queueBreakBlock(WorldSetting setting, Block block, Runnable placer) {
+        int min = Math.min(setting.getGenerateMinTime(), setting.getGenerateMaxTime());
+        int max = Math.max(setting.getGenerateMinTime(), setting.getGenerateMaxTime());
+        int generateDelay = (int) (min + (max - min) * random.nextFloat());
 
-            putQueueBlock(QueueBlock.of(block, queuedTime));
-            placer.run();
-        });
-
+        putQueueBlock(QueueBlock.of(block, System.currentTimeMillis(), generateDelay));
+        runTask(placer);
     }
 
+    /**
+     * キューされたブロックなら true を返します
+     */
     public boolean containsQueue(Block block) {
-        return queuedBlockKeys.containsKey(QueueBlock.getKeyOfBlock(block));
+        return queuedBlockKeys.containsKey(QueueBlock.getLocationKeyOfBlock(block));
     }
 
+    /**
+     * キューされたブロックを削除します
+     */
+    public @Nullable QueueBlock removeQueue(Block block) {
+        String key = QueueBlock.getLocationKeyOfBlock(block);
+        QueueBlock queueBlock = queuedBlockKeys.remove(key);
+        if (queueBlock != null) {
+            queuedBlocks.values().remove(queueBlock);
+            storedQueueBlockGenerateDelays.remove(key);
+        }
+        return queueBlock;
+    }
+
+    /**
+     * キューされている全てのブロックを返します
+     */
     public Multimap<World, QueueBlock> queuedBlocks() {
         return queuedBlocks;
     }
 
-
+    /**
+     * チャンク内の {@link QueueBlock} を全てチャンクのPDCに保存し、キューから削除します
+     */
     public Set<QueueBlock> storeQueueBlocksToChunk(Chunk chunk) {
         PersistentDataContainer pdc = chunk.getPersistentDataContainer();
 
@@ -141,6 +185,10 @@ public class StoneGenerateManager {
             if (Math.floor(queueBlock.getX() / 16f) == chunk.getX() && Math.floor(queueBlock.getZ() / 16f) == chunk.getZ()) {
                 storeBlocks.add(queueBlock);
                 it.remove();
+
+                // プラグインがアンロードされるまで生成時間を保持することで
+                // チャンクアンロードを繰り返すことによる再抽選を防ぐ
+                storedQueueBlockGenerateDelays.put(queueBlock.getLocationKey(), queueBlock.getGenerateDelay());
             }
         }
 
@@ -172,9 +220,12 @@ public class StoneGenerateManager {
         return storeBlocks;
     }
 
+    /**
+     * チャンクのPDCに保存された {@link QueueBlock} を全てキューに復元します<br>
+     * この処理で生成までの遅延が再設定されます。ワールド設定が存在しない場合は無視されます
+     */
     public Set<QueueBlock> restoreQueueBlocksFromChunk(Chunk chunk) {
         PersistentDataContainer pdc = chunk.getPersistentDataContainer();
-
         int[] xValues = pdc.get(queueBlockXPDCKey, PersistentDataType.INTEGER_ARRAY);
         int[] yValues = pdc.get(queueBlockYPDCKey, PersistentDataType.INTEGER_ARRAY);
         int[] zValues = pdc.get(queueBlockZPDCKey, PersistentDataType.INTEGER_ARRAY);
@@ -183,15 +234,29 @@ public class StoneGenerateManager {
         if (xValues == null || yValues == null || zValues == null || timeValues == null)
             return Collections.emptySet();
 
+        WorldSetting setting = getConfig().getWorld(chunk.getWorld()).orElse(null);
+        if (setting == null) {
+            util.d(() -> "Not configured in " + chunk.getWorld().getName());
+            return Collections.emptySet();
+        }
+
         Set<QueueBlock> queueBlocks = new HashSet<>();
+        int min = Math.min(setting.getGenerateMinTime(), setting.getGenerateMaxTime());
+        int max = Math.max(setting.getGenerateMinTime(), setting.getGenerateMaxTime());
+
         for (int i = 0; i < xValues.length; i++) {
-            queueBlocks.add(new QueueBlock(
+            QueueBlock queueBlock = new QueueBlock(
                     chunk.getWorld(),
                     chunk.getX() * 16 + xValues[i],
                     yValues[i],
                     chunk.getZ() * 16 + zValues[i],
-                    timeValues[i]
-            ));
+                    timeValues[i],
+                    0
+            );
+            queueBlock.setGenerateDelay(
+                    Optional.ofNullable(storedQueueBlockGenerateDelays.remove(queueBlock.getLocationKey()))
+                            .orElseGet(() -> (int) (min + (max - min) * random.nextFloat())));
+            queueBlocks.add(queueBlock);
         }
 
         queueBlocks.forEach(this::putQueueBlock);

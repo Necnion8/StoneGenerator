@@ -6,18 +6,26 @@ worlds:
     fill-type: cobblestone
 
     # 生成に必要な時間 (秒)
-    generate-time-min: 30
-    generate-time-max: 600
+    generate-time-min: 60
+    generate-time-max: 60
+
+    # 生成時の音 (null で無音)
+    generate-sound: block_stone_break
 
     # 鉱石ブロックの設定
     generate-blocks:
+      - type: stone
+        priority: 50
+        fill-type: cracked_stone_bricks  # 上書き可
+      - type: coal_ore
+        priority: 25
       - type: iron_ore
         priority: 10
       - type: gold_ore
         priority: 5
-      - type: stone
-        priority: 20
-        fill-type: cracked_stone_bricks  # fill-type を上書きできます
+      - type: diamond_ore
+        priority: 1
+        generate-sound: entity_experience_orb_pickup  # 上書き可 (-1 で無音)
 
     # ブロックを処理する条件 (いずれかが失敗する場合は処理しません)
     target-blocks:

@@ -10,13 +10,22 @@ public class QueueBlock {
     private final int y;
     private final int z;
     private final long queuedTime;
+    private final String key;
+    private int generateDelay;
 
-    public QueueBlock(World world, int x, int y, int z, long queuedTime) {
+    /**
+     * 鉱石の生成がキューされているブロックを表します
+     * @param queuedTime キューに追加されたエポック時間 (millis)
+     * @param generateDelay 生成に必要な待ち時間 (seconds)
+     */
+    public QueueBlock(World world, int x, int y, int z, long queuedTime, int generateDelay) {
         this.world = world;
         this.x = x;
         this.y = y;
         this.z = z;
         this.queuedTime = queuedTime;
+        this.generateDelay = generateDelay;
+        this.key = formatLocationKey(x, y, z, world.getName());
     }
 
     public World getWorld() {
@@ -35,21 +44,43 @@ public class QueueBlock {
         return z;
     }
 
+    /**
+     * キューに追加されたエポック時間 (millis)
+     */
     public long getQueuedTime() {
         return queuedTime;
     }
 
-    public String getKey() {
-        return x + "," + y + "," + z + "," + world.getName();
+    /**
+     * 生成に必要な待ち時間 (seconds)
+     * @see #setGenerateDelay(int)
+     */
+    public int getGenerateDelay() {
+        return generateDelay;
+    }
+
+    /**
+     * @see #getGenerateDelay()
+     */
+    public void setGenerateDelay(int delay) {
+        this.generateDelay = delay;
+    }
+
+    public String getLocationKey() {
+        return key;
     }
 
 
-    public static QueueBlock of(Block block, long queuedTime) {
-        return new QueueBlock(block.getWorld(), block.getX(), block.getY(), block.getZ(), queuedTime);
+    public static QueueBlock of(Block block, long queuedTime, int generateDelay) {
+        return new QueueBlock(block.getWorld(), block.getX(), block.getY(), block.getZ(), queuedTime, generateDelay);
     }
 
-    public static String getKeyOfBlock(Block block) {
-        return block.getX() + "," + block.getY() + "," + block.getZ() + "," + block.getWorld().getName();
+    public static String formatLocationKey(int x, int y, int z, String worldName) {
+        return x + "," + y + "," + z + "," + worldName;
+    }
+
+    public static String getLocationKeyOfBlock(Block block) {
+        return formatLocationKey(block.getX(), block.getY(), block.getZ(), block.getWorld().getName());
     }
 
 }

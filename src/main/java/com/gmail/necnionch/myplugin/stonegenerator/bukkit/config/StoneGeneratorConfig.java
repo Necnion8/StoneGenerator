@@ -2,6 +2,7 @@ package com.gmail.necnionch.myplugin.stonegenerator.bukkit.config;
 
 import com.gmail.necnionch.myplugin.stonegenerator.common.BukkitConfigDriver;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -36,7 +37,7 @@ public class StoneGeneratorConfig extends BukkitConfigDriver {
             try {
                 fillBlockType = Material.valueOf(tmp);
             } catch (IllegalArgumentException e) {
-                getLogger().severe("Unknown block type: " + tmp + " (in " + worldName + " world)");
+                getLogger().severe("Unknown block type: " + tmp + " (in " + worldName + " world, fill-type)");
                 continue;
             }
 
@@ -49,25 +50,42 @@ public class StoneGeneratorConfig extends BukkitConfigDriver {
                     String tmp2 = Optional.ofNullable(bSection.getString("type")).orElse("").toUpperCase(Locale.ROOT);
                     Material type;
                     try {
-                        type = Material.valueOf(tmp);
+                        type = Material.valueOf(tmp2);
                     } catch (IllegalArgumentException e) {
-                        getLogger().severe("Unknown block type: " + tmp2 + " (in " + worldName + " world)");
+                        getLogger().severe("Unknown block type: " + tmp2 + " (in " + worldName + " world, generate-blocks.type)");
                         continue;
                     }
 
-                    int priority = bSection.getInt("priority", 1);
                     Material fillType = Optional.ofNullable(bSection.getString("fill-type"))
                             .map(s -> s.toUpperCase(Locale.ROOT))
                             .map(s -> {
                                 try {
                                     return Material.valueOf(s);
                                 } catch (IllegalArgumentException e) {
-                                    getLogger().severe("Unknown block type: " + s + " (in " + worldName + " world)");
+                                    getLogger().severe("Unknown block type: " + s + " (in " + worldName + " world, generate-blocks.fill-type)");
                                     return null;
                                 }
                             })
                             .orElse(null);
-                    blocks.add(new WorldSetting.GenerateBlock(type, priority, fillType));
+
+                    Sound genSound = Optional.ofNullable(bSection.getString("generate-sound"))
+                            .map(s -> s.toUpperCase(Locale.ROOT))
+                            .map(s -> {
+                                if ("-1".equalsIgnoreCase(s))
+                                    return null;
+                                try {
+                                    return Sound.valueOf(s);
+                                } catch (IllegalArgumentException e) {
+                                    getLogger().warning("Unknown sound: " + s + " (in " + worldName + " world, generate-blocks.generate-sound)");
+                                    return null;
+                                }
+                            })
+                            .orElse(null);
+
+                    int priority = bSection.getInt("priority", 1);
+                    boolean overrideGenSound = bSection.getKeys(false).contains("generate-sound");
+
+                    blocks.add(new WorldSetting.GenerateBlock(type, priority, fillType, genSound, overrideGenSound));
                 }
             });
 
@@ -77,12 +95,24 @@ public class StoneGeneratorConfig extends BukkitConfigDriver {
                 try {
                     targetDeepTypes.add(Material.valueOf(typeName));
                 } catch (IllegalArgumentException e) {
-                    getLogger().severe("Unknown block type: " + typeName + " (in " + worldName + " world)");
+                    getLogger().severe("Unknown block type: " + typeName + " (in " + worldName + " world, generate-blocks.target-blocks.deep-types)");
                 }
             }
 
+            Sound genSound = Optional.ofNullable(wSection.getString("generate-sound"))
+                    .map(s -> s.toUpperCase(Locale.ROOT))
+                    .map(s -> {
+                        try {
+                            return Sound.valueOf(s);
+                        } catch (IllegalArgumentException e) {
+                            getLogger().warning("Unknown sound: " + s + " (in " + worldName + " world, generate-sound)");
+                            return null;
+                        }
+                    })
+                    .orElse(null);
+
             worlds.put(worldName, new WorldSetting(
-                    blocks, fillBlockType, genMinTime, genMaxTime, new WorldSetting.TargetBlocks(targetDeepTypes)
+                    blocks, fillBlockType, genMinTime, genMaxTime, genSound, new WorldSetting.TargetBlocks(targetDeepTypes)
             ));
         }
         return true;
