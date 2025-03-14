@@ -2,21 +2,27 @@ package com.gmail.necnionch.myplugin.stonegenerator.bukkit.listener;
 
 import com.gmail.necnionch.myplugin.stonegenerator.bukkit.StoneGenerateManager;
 import com.gmail.necnionch.myplugin.stonegenerator.bukkit.config.WorldSetting;
+import com.gmail.necnionch.myplugin.stonegenerator.bukkit.util.QueueBlock;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
+
+import java.util.Optional;
 
 public class BlockListener implements Listener {
 
@@ -43,7 +49,6 @@ public class BlockListener implements Listener {
             return;
         }
 
-
         WorldSetting setting = gen.getConfig()
                 .getWorld(block.getWorld())
                 .orElse(null);
@@ -52,17 +57,19 @@ public class BlockListener implements Listener {
         if (setting == null)
             return;
 
+        // 採掘された面を取得
+        Location eyeLocation = player.getEyeLocation();
+        RayTraceResult result = player.getWorld().rayTraceBlocks(eyeLocation, eyeLocation.getDirection(), eyeLocation.distance(block.getLocation().add(.5, .5, .5)) + 1, FluidCollisionMode.NEVER);
+        BlockFace hitBlockFace = (result == null || result.getHitBlockFace() == null || !block.equals(result.getHitBlock())) ? null : result.getHitBlockFace();
+
         // ブロックをテストする？
         if (!setting.getTargetBlocks().getDeepTypes().isEmpty()) {
-            Location eyeLocation = player.getEyeLocation();
-            RayTraceResult result = player.getWorld().rayTraceBlocks(eyeLocation, eyeLocation.getDirection(), eyeLocation.distance(block.getLocation().add(.5, .5, .5)) + 1, FluidCollisionMode.NEVER);
-
-            if (result == null || result.getHitBlockFace() == null || !block.equals(result.getHitBlock())) {
+            if (hitBlockFace == null) {
                 event.setCancelled(true);  // bug?
                 return;
             }
 
-            Vector testDirection = result.getHitBlockFace().getDirection().multiply(-1);
+            Vector testDirection = hitBlockFace.getDirection().multiply(-1);
             Location testBlockPos = block.getLocation();
 
             for (Material deepType : setting.getTargetBlocks().getDeepTypes()) {
@@ -77,11 +84,31 @@ public class BlockListener implements Listener {
         // 自動生成処理の対象ブロック？
         for (WorldSetting.GenerateBlock bSetting : setting.blocks()) {
             if (block.getType().equals(bSetting.getType())) {
-                gen.queueBreakBlock(setting, block, () -> block.setType(setting.getOverrideFillBlockType(bSetting)));
+                QueueBlock.BreakInfo breakInfo = new QueueBlock.BreakInfo(player, hitBlockFace);
+                gen.queueBreakBlock(setting, block, breakInfo, () -> block.setType(setting.getOverrideFillBlockType(bSetting)));
                 break;
             }
         }
 
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onDrop(BlockDropItemEvent event) {
+        QueueBlock.BreakInfo breakInfo = Optional.ofNullable(gen.getQueue(event.getBlock()))
+                .map(QueueBlock::getBreakInfo)
+                .orElse(null);
+
+        if (breakInfo == null || breakInfo.getFace() == null)
+            return;
+
+        Vector direction = breakInfo.getFace().getDirection();
+        for (Item item : event.getItems()) {
+            Location location = item.getLocation().add(direction);
+            item.teleport(location);
+
+            Vector mod = breakInfo.getPlayer().getEyeLocation().subtract(location).toVector().multiply(.1);
+            item.setVelocity(mod);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)

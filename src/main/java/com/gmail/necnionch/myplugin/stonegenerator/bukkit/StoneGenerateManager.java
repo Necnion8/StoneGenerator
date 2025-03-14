@@ -137,12 +137,12 @@ public class StoneGenerateManager {
     /**
      * 採掘されたブロックをキューして、丸石を設置します
      */
-    public void queueBreakBlock(WorldSetting setting, Block block, Runnable placer) {
+    public void queueBreakBlock(WorldSetting setting, Block block, QueueBlock.BreakInfo breakInfo, Runnable placer) {
         int min = Math.min(setting.getGenerateMinTime(), setting.getGenerateMaxTime());
         int max = Math.max(setting.getGenerateMinTime(), setting.getGenerateMaxTime());
         int generateDelay = (int) (min + (max - min) * random.nextFloat());
 
-        putQueueBlock(QueueBlock.of(block, System.currentTimeMillis(), generateDelay));
+        putQueueBlock(QueueBlock.of(block, System.currentTimeMillis(), generateDelay, breakInfo));
         runTask(placer);
     }
 
@@ -164,6 +164,13 @@ public class StoneGenerateManager {
             storedQueueBlockGenerateDelays.remove(key);
         }
         return queueBlock;
+    }
+
+    /**
+     * キューされたブロックを返します
+     */
+    public @Nullable QueueBlock getQueue(Block block) {
+        return queuedBlockKeys.get(QueueBlock.getLocationKeyOfBlock(block));
     }
 
     /**
@@ -251,7 +258,8 @@ public class StoneGenerateManager {
                     yValues[i],
                     chunk.getZ() * 16 + zValues[i],
                     timeValues[i],
-                    0
+                    0,
+                    null
             );
             queueBlock.setGenerateDelay(
                     Optional.ofNullable(storedQueueBlockGenerateDelays.remove(queueBlock.getLocationKey()))
